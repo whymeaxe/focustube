@@ -48,6 +48,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        vm.checkUpdate()   // every time FocusTube is opened, not only on a cold start
+    }
+
     /** Called by the UI whenever a video opens/closes or the setting changes. */
     fun setPip(allowed: Boolean, vertical: Boolean) {
         pipAllowed = allowed && pipSupported

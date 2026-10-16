@@ -99,9 +99,9 @@ object Notifier {
 class FeedWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        // Look for app updates at most every 6 hours
+        // Look for app updates at most once an hour
         val prefs = applicationContext.getSharedPreferences("hv", Context.MODE_PRIVATE)
-        if (System.currentTimeMillis() - prefs.getLong("update_checked", 0) > 6 * 3_600_000L) {
+        if (System.currentTimeMillis() - prefs.getLong("update_checked", 0) > 3_600_000L) {
             prefs.edit().putLong("update_checked", System.currentTimeMillis()).apply()
             runCatching { Updater.notifyIfNew(applicationContext) }
         }

@@ -38,10 +38,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         checkUpdate()
     }
 
+    private var lastUpdateCheck = 0L
+    private var dismissedCode = 0
+    private var dismissedAt = 0L
+
+    /** Runs every time the app comes to the foreground (throttled to once a minute). */
     fun checkUpdate() {
+        val now = System.currentTimeMillis()
+        if (now - lastUpdateCheck < 60_000L || _state.value.updateProgress != null) return
+        lastUpdateCheck = now
         viewModelScope.launch {
-            val u = Updater.check()
-            if (u != null) _state.update { it.copy(update = u) }
+            val u = Updater.check() ?: return@launch
+            // "Later" hides a normal update for 6 hours; required updates always show.
+            val snoozed = !u.required && u.code <= dismissedCode && System.currentTimeMillis() - dismissedAt < 6 * 3_600_000L
+            if (!snoozed) _state.update { it.copy(update = u) }
         }
     }
 
@@ -55,7 +65,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    fun dismissUpdate() { _state.update { it.copy(update = null, updateError = null) } }
+    fun dismissUpdate() {
+        _state.value.update?.let { dismissedCode = it.code; dismissedAt = System.currentTimeMillis() }
+        _state.update { it.copy(update = null, updateError = null) }
+    }
 
     fun installUpdate() {
         val u = _state.value.update ?: return
