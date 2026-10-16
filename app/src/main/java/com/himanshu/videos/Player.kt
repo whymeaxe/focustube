@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -84,6 +85,13 @@ fun PlayerScreen(
 ) {
     val ctx = LocalContext.current
     BackHandler(onBack = onClose)
+
+    // Keep the screen awake while the player is open (including fullscreen), like YouTube does.
+    val activity = ctx.findActivity()
+    DisposableEffect(activity) {
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)

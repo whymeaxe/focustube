@@ -68,6 +68,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -414,18 +415,27 @@ private fun CreatorBubble(c: Creator, selected: Boolean, dimmed: Boolean, onClic
 
 @Composable
 fun Avatar(c: Creator?, modifier: Modifier, alpha: Float = 1f) {
+    // The initial is only a fallback for creators with no photo (or a photo that failed to load).
+    // It is never drawn underneath the photo, so it can't show through when the bubble is dimmed.
+    var failed by remember(c?.avatar) { mutableStateOf(false) }
+    val showPhoto = c?.avatar != null && !failed
     Box(
-        modifier.clip(CircleShape).background(Brush.linearGradient(listOf(HV.Forest, HV.Deep))),
+        modifier
+            .alpha(alpha)
+            .clip(CircleShape)
+            .background(Brush.linearGradient(listOf(HV.Forest, HV.Deep))),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            (c?.name?.firstOrNull() ?: '•').uppercase(),
-            color = HV.Mint, fontWeight = FontWeight.Bold, fontSize = 18.sp,
-        )
-        if (c?.avatar != null) {
+        if (showPhoto) {
             AsyncImage(
-                model = c.avatar, contentDescription = c.name, contentScale = ContentScale.Crop,
-                alpha = alpha, modifier = Modifier.fillMaxSize(),
+                model = c!!.avatar, contentDescription = c.name, contentScale = ContentScale.Crop,
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                (c?.name?.firstOrNull() ?: '•').uppercase(),
+                color = HV.Mint, fontWeight = FontWeight.Bold, fontSize = 18.sp,
             )
         }
     }
