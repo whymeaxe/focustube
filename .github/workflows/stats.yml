@@ -31,11 +31,13 @@ jobs:
           import json, datetime
           pages = json.load(open("releases.json"))
           rels = [r for page in pages for r in page]
-          rels = [r for r in rels if not r["draft"] and not r["prerelease"] and r["tag_name"].startswith("focustube-v")]
           num = lambda r: int(r["tag_name"].split("focustube-v", 1)[1] or 0)
+          # Count downloads across every FocusTube release ever published (old ones may now be drafts).
+          everything = [r for r in rels if r["tag_name"].startswith("focustube-v")]
+          rels = [r for r in everything if not r["draft"] and not r["prerelease"]]
           rels.sort(key=num, reverse=True)
           downloads = updates = 0
-          for r in rels:
+          for r in everything:
               for a in r["assets"]:
                   if a["name"] == "FocusTube.apk": downloads += a["download_count"]
                   elif a["name"] == "FocusTube-update.apk": updates += a["download_count"]
