@@ -69,9 +69,12 @@ object Updater {
                 val code = tag.removePrefix(BuildConfig.UPDATE_TAG_PREFIX).toIntOrNull() ?: continue
                 val assets = r.optJSONArray("assets") ?: continue
                 var apk: String? = null
+                // Prefer the dedicated update file so website download counts stay accurate.
                 for (j in 0 until assets.length()) {
                     val a = assets.getJSONObject(j)
-                    if (a.optString("name").endsWith(".apk")) { apk = a.optString("browser_download_url"); break }
+                    val n = a.optString("name")
+                    if (n == "FocusTube-update.apk") { apk = a.optString("browser_download_url"); break }
+                    if (apk == null && n.endsWith(".apk")) apk = a.optString("browser_download_url")
                 }
                 if (apk.isNullOrBlank()) continue
                 val text = r.optString("body")

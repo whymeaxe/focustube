@@ -54,7 +54,11 @@ jobs:
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk FocusTube.apk
+        # Same file twice: FocusTube.apk is what the website hands out (counted as downloads),
+        # FocusTube-update.apk is what the in-app updater fetches (counted separately as updates).
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk FocusTube.apk
+          cp app/build/outputs/apk/release/app-release.apk FocusTube-update.apk
 
       - name: Write release notes
         env:
@@ -74,5 +78,7 @@ jobs:
           name: "FocusTube v1.0.${{ github.run_number }}"
           target_commitish: ${{ github.sha }}
           make_latest: true
-          files: FocusTube.apk
+          files: |
+            FocusTube-update.apk
+            FocusTube.apk
           body_path: notes.md
