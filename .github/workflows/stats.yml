@@ -1,0 +1,67 @@
+name: Update download stats
+
+# Publishes a small stats.json (download count + latest version) to the "stats" branch.
+# The website reads it from raw.githubusercontent.com, which has no per-visitor rate limit,
+# so the counter always shows even on busy mobile networks.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stats
+  cancel-in-progress: true
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build stats.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPO/releases?per_page=100" --paginate --slurp > releases.json
+          python3 - <<'PY'
+          import json, datetime
+          pages = json.load(open("releases.json"))
+          rels = [r for page in pages for r in page]
+          rels = [r for r in rels if not r["draft"] and not r["prerelease"] and r["tag_name"].startswith("focustube-v")]
+          num = lambda r: int(r["tag_name"].split("focustube-v", 1)[1] or 0)
+          rels.sort(key=num, reverse=True)
+          downloads = updates = 0
+          for r in rels:
+              for a in r["assets"]:
+                  if a["name"] == "FocusTube.apk": downloads += a["download_count"]
+                  elif a["name"] == "FocusTube-update.apk": updates += a["download_count"]
+          out = {"downloads": downloads, "updates": updates,
+                 "updated_at": datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"}
+          if rels:
+              r = rels[0]
+              apk = next((a for a in r["assets"] if a["name"] == "FocusTube.apk"), None)
+              if apk:
+                  out["latest"] = {
+                      "version": (r["name"] or r["tag_name"]).replace("FocusTube", "").strip(),
+                      "tag": r["tag_name"], "published_at": r["published_at"],
+                      "apk_url": apk["browser_download_url"], "size": apk["size"],
+                      "sha256": (apk.get("digest") or "").replace("sha256:", ""),
+                  }
+          json.dump(out, open("stats.json", "w"), indent=2)
+          print(json.dumps(out, indent=2))
+          PY
+
+      - name: Publish to the stats branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir out && mv stats.json out/ && cd out
+          git init -q -b stats
+          git -c user.name="FocusTube Bot" -c user.email="actions@github.com" add stats.json
+          git -c user.name="FocusTube Bot" -c user.email="actions@github.com" commit -qm "Update stats"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" stats
