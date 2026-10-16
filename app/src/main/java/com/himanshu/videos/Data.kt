@@ -166,6 +166,11 @@ class Store(ctx: Context) {
         p.edit().putString("creators", a.toString()).commit()
     }
 
+    fun pipEnabled(): Boolean = p.getBoolean("pip", true)
+    fun setPipEnabled(v: Boolean) { p.edit().putBoolean("pip", v).apply() }
+    fun keepAwake(): Boolean = p.getBoolean("keep_awake", true)
+    fun setKeepAwake(v: Boolean) { p.edit().putBoolean("keep_awake", v).apply() }
+
     fun seen(): Set<String> = HashSet(p.getStringSet("seen", emptySet()) ?: emptySet())
     fun saveSeen(s: Set<String>) {
         val trimmed = if (s.size > 6000) s.toList().takeLast(3000).toSet() else s

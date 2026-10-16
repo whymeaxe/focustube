@@ -11,6 +11,10 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -82,14 +86,16 @@ fun PlayerScreen(
     related: List<Video>,
     onClose: () -> Unit,
     onPlay: (String) -> Unit,
+    inPip: Boolean = false,
+    keepAwake: Boolean = true,
 ) {
     val ctx = LocalContext.current
     BackHandler(onBack = onClose)
 
     // Keep the screen awake while the player is open (including fullscreen), like YouTube does.
     val activity = ctx.findActivity()
-    DisposableEffect(activity) {
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    DisposableEffect(activity, keepAwake) {
+        if (keepAwake) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
@@ -114,8 +120,8 @@ fun PlayerScreen(
             )
         )
 
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
+        Column(Modifier.fillMaxSize().then(if (inPip) Modifier else Modifier.statusBarsPadding())) {
+            if (!inPip) Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -132,13 +138,18 @@ fun PlayerScreen(
                 Spacer(Modifier.size(42.dp))
             }
 
-            val playerShape = RoundedCornerShape(22.dp)
-            val playerMod = if (video?.isShort == true) {
+            val playerShape = if (inPip) RectangleShape else RoundedCornerShape(22.dp)
+            val playerMod = if (inPip) {
+                Modifier.fillMaxSize()
+            } else if (video?.isShort == true) {
                 Modifier.fillMaxWidth(0.62f).aspectRatio(9f / 16f)
             } else {
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp).aspectRatio(16f / 9f)
             }
-            Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
+            Box(
+                if (inPip) Modifier.fillMaxSize() else Modifier.fillMaxWidth().padding(top = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
                 key(videoId) {
                     YouTubePlayer(
                         videoId,
@@ -148,7 +159,7 @@ fun PlayerScreen(
             }
 
             LazyColumn(
-                Modifier.fillMaxSize(),
+                if (inPip) Modifier.size(0.dp) else Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 60.dp),
             ) {
                 item {
@@ -284,6 +295,22 @@ private fun YouTubePlayer(videoId: String, modifier: Modifier) {
     val activity = LocalContext.current.findActivity()
     var customView by remember { mutableStateOf<View?>(null) }
     var customCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
+    var webRef by remember { mutableStateOf<WebView?>(null) }
+
+    // No background play: when the app is fully left (not in picture-in-picture), pause the video.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = LifecycleEventObserver { _, e ->
+            val w = webRef ?: return@LifecycleEventObserver
+            when (e) {
+                Lifecycle.Event.ON_STOP -> { w.evaluateJavascript("pauseVideo()", null); w.onPause() }
+                Lifecycle.Event.ON_START -> w.onResume()
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
 
     fun exitFullscreen() {
         val a = activity ?: return
@@ -305,9 +332,13 @@ private fun YouTubePlayer(videoId: String, modifier: Modifier) {
         <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}
         iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}</style>
         </head><body>
-        <iframe src="https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1"
+        <iframe id="p" src="https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1&enablejsapi=1"
           allow="autoplay; encrypted-media; picture-in-picture; fullscreen; web-share"
           referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <script>
+        function pauseVideo(){var f=document.getElementById('p');if(f&&f.contentWindow){
+          f.contentWindow.postMessage(JSON.stringify({event:'command',func:'pauseVideo',args:[]}),'*');}}
+        </script>
         </body></html>
     """.trimIndent()
 
@@ -356,6 +387,7 @@ private fun YouTubePlayer(videoId: String, modifier: Modifier) {
                     override fun onHideCustomView() { exitFullscreen() }
                 }
                 loadDataWithBaseURL("https://com.himanshu.videos", html, "text/html", "utf-8", null)
+                webRef = this
             }
         },
         onRelease = { it.stopLoading(); it.loadUrl("about:blank"); it.destroy() },

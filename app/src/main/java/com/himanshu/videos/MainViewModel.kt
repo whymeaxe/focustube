@@ -21,11 +21,15 @@ data class UiState(
     val update: UpdateInfo? = null,
     val updateProgress: Float? = null,
     val updateError: String? = null,
+    val pip: Boolean = true,
+    val keepAwake: Boolean = true,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
-    private val _state = MutableStateFlow(UiState(store.creators(), store.cachedFeed()))
+    private val _state = MutableStateFlow(
+        UiState(store.creators(), store.cachedFeed(), pip = store.pipEnabled(), keepAwake = store.keepAwake())
+    )
     val state = _state.asStateFlow()
     private var refreshJob: Job? = null
 
@@ -39,6 +43,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val u = Updater.check()
             if (u != null) _state.update { it.copy(update = u) }
         }
+    }
+
+    fun setPip(v: Boolean) { store.setPipEnabled(v); _state.update { it.copy(pip = v) } }
+    fun setKeepAwake(v: Boolean) { store.setKeepAwake(v); _state.update { it.copy(keepAwake = v) } }
+
+    /** Manual check from Settings. Returns true if an update was found (its card is shown). */
+    suspend fun checkUpdateNow(): Boolean {
+        val u = Updater.check() ?: return false
+        _state.update { it.copy(update = u) }
+        return true
     }
 
     fun dismissUpdate() { _state.update { it.copy(update = null, updateError = null) } }

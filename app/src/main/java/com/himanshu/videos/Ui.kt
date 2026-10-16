@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -95,6 +96,9 @@ fun AppRoot(
     vm: MainViewModel,
     pendingVideo: MutableState<String?>,
     pendingShare: MutableState<String?>,
+    inPip: Boolean = false,
+    pipSupported: Boolean = true,
+    onPipChange: (Boolean, Boolean) -> Unit = { _, _ -> },
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
     var playing by rememberSaveable { mutableStateOf<String?>(null) }
@@ -105,6 +109,13 @@ fun AppRoot(
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var toRemove by remember { mutableStateOf<Creator?>(null) }
     var showSite by rememberSaveable { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+
+    // Tell the activity whether leaving the app should shrink the video into picture-in-picture.
+    val playingVideo = playing?.let { id -> s.videos.firstOrNull { it.id == id } }
+    LaunchedEffect(playing, s.pip, playingVideo?.isShort) {
+        onPipChange(playing != null && s.pip, playingVideo?.isShort == true)
+    }
 
     val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {
@@ -134,6 +145,7 @@ fun AppRoot(
             onLongPressCreator = { toRemove = it },
             onAdd = { addPrefill = ""; showAdd = true },
             onOpenSite = { showSite = true },
+            onSettings = { showSettings = true },
         )
 
         // Floating "+" — glass orb, bottom right
@@ -168,6 +180,8 @@ fun AppRoot(
                     related = s.videos.filter { it.channelId == video?.channelId && it.id != id }.take(12),
                     onClose = { playing = null },
                     onPlay = { playing = it; lastPlaying = it },
+                    inPip = inPip,
+                    keepAwake = s.keepAwake,
                 )
             }
         }
@@ -180,7 +194,7 @@ fun AppRoot(
             WebScreen(url = DESIGNER_SITE, onClose = { showSite = false })
         }
 
-        s.update?.let { u ->
+        if (!inPip) s.update?.let { u ->
             UpdateOverlay(
                 info = u,
                 progress = s.updateProgress,
@@ -189,6 +203,18 @@ fun AppRoot(
                 onLater = vm::dismissUpdate,
             )
         }
+    }
+
+    if (showSettings) {
+        SettingsSheet(
+            s = s,
+            pipSupported = pipSupported,
+            onPip = vm::setPip,
+            onKeepAwake = vm::setKeepAwake,
+            onCheckUpdate = { vm.checkUpdateNow() },
+            onOpenSite = { showSettings = false; showSite = true },
+            onDismiss = { showSettings = false },
+        )
     }
 
     if (showAdd) {
@@ -232,6 +258,7 @@ private fun FeedScreen(
     onLongPressCreator: (Creator) -> Unit,
     onAdd: () -> Unit,
     onOpenSite: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     val shown = remember(s.videos, filterCreator, tab) {
         s.videos.filter { v ->
@@ -244,7 +271,7 @@ private fun FeedScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 140.dp),
         ) {
-            item { Header(s) }
+            item { Header(s, onSettings) }
 
             if (s.creators.isNotEmpty()) {
                 item {
@@ -298,17 +325,24 @@ private fun FeedScreen(
 }
 
 @Composable
-private fun Header(s: UiState) {
+private fun Header(s: UiState, onSettings: () -> Unit) {
     Column(
         Modifier
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 22.dp, end = 22.dp, top = 26.dp)
+            .padding(start = 22.dp, end = 22.dp, top = 18.dp)
     ) {
-        Text(
-            "ONLY YOUR CREATORS",
-            color = HV.Mint.copy(alpha = 0.8f), fontSize = 11.sp,
-            letterSpacing = 3.sp, fontWeight = FontWeight.SemiBold,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "ONLY YOUR CREATORS",
+                color = HV.Mint.copy(alpha = 0.8f), fontSize = 11.sp,
+                letterSpacing = 3.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                Modifier.size(42.dp).glass(CircleShape).clickable(onClick = onSettings),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.Settings, "Settings", tint = HV.Sub, modifier = Modifier.size(20.dp)) }
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             buildAnnotatedString {
