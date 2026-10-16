@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.HV" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/hv_black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:colorAccent">@color/hv_mint</item>
+    </style>
+    <color name="hv_black">#FF020403</color>
+    <color name="hv_mint">#FFA9E5C3</color>
+</resources>

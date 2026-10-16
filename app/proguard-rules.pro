@@ -1,0 +1,2 @@
+-keep class com.himanshu.videos.FeedWorker { *; }
+-dontwarn org.xmlpull.v1.**

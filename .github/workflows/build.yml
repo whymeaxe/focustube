@@ -1,0 +1,78 @@
+name: Build FocusTube APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "What's new (shown to users in the update popup)"
+        required: false
+        default: ""
+      required:
+        description: "Force everyone on older versions to update before using the app"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      # Releases are signed with your private key, stored in repo secrets:
+      # FOCUSTUBE_KEYSTORE (base64 of the .jks) and FOCUSTUBE_KEY_PASSWORD.
+      - name: Restore signing key
+        env:
+          KS: ${{ secrets.FOCUSTUBE_KEYSTORE }}
+          PW: ${{ secrets.FOCUSTUBE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS" ] || [ -z "$PW" ]; then
+            echo "::error::Add the FOCUSTUBE_KEYSTORE and FOCUSTUBE_KEY_PASSWORD secrets (Settings > Secrets and variables > Actions), then run this again."
+            exit 1
+          fi
+          echo "$KS" | base64 -d > release.jks
+          echo "KEY_ALIAS=focustube" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=$PW" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          UPDATE_REPO: ${{ github.repository }}
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk FocusTube.apk
+
+      - name: Write release notes
+        env:
+          NOTES: ${{ inputs.notes || github.event.head_commit.message }}
+          REQUIRED: ${{ inputs.required && '[required]' || '' }}
+        run: |
+          {
+            echo "$NOTES" | grep -viE "^(Co-Authored-By|Claude-Session):" | head -n 12
+            echo
+            echo "$REQUIRED"
+          } > notes.md
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: focustube-v${{ github.run_number }}
+          name: "FocusTube v1.0.${{ github.run_number }}"
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: FocusTube.apk
+          body_path: notes.md
