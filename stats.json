@@ -1,0 +1,13 @@
+{
+  "downloads": 10,
+  "updates": 4,
+  "updated_at": "2026-10-31T19:28:25Z",
+  "latest": {
+    "version": "v1.0.8",
+    "tag": "focustube-v8",
+    "published_at": "2026-10-16T13:53:28Z",
+    "apk_url": "https://github.com/whymeaxe/focustube/releases/download/focustube-v8/FocusTube.apk",
+    "size": 1629018,
+    "sha256": "42e52d5b418eaef015cd77dec08101ad19e05b568444340afef65ee3b39987b7"
+  }
+}
